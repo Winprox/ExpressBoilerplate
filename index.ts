@@ -1,7 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import c from 'chalk';
-import ui from 'swagger-ui-express';
+import { writeFileSync } from 'fs';
+import { setup, serve } from 'swagger-ui-express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
@@ -19,15 +20,17 @@ import {
   createOpenApiExpressMiddleware,
 } from 'trpc-openapi';
 
+config(); //? Load .env
+const port = process.env.PORT ?? 8080;
 const isProd = process.env.NODE_ENV === 'production';
 const jwtSecret = process.env.JWT_SECRET ?? '';
 
-config();
-const port = process.env.PORT ?? 8080;
 const app = express();
 const server = createServer(app);
 const io = new Server(server);
+const prisma = new PrismaClient();
 
+//? TRPC Context
 const createContext = ({ req }: CreateExpressContextOptions) => {
   //? JWT Auth
   const getUser = () => {
@@ -53,6 +56,7 @@ const createContext = ({ req }: CreateExpressContextOptions) => {
   return { req, user: getUser() };
 };
 
+//? Init TRPC
 const { router: trpcRouter, procedure } = initTRPC
   .context<inferAsyncReturnType<typeof createContext>>()
   .meta<OpenApiMeta>()
@@ -64,13 +68,14 @@ const { router: trpcRouter, procedure } = initTRPC
     },
   });
 
+//? TRPC Protected Middleware
 const protectedProcedure = procedure.use(({ ctx, next }) => {
   //? Check User Permissions
   if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 
-const prisma = new PrismaClient();
+//? TRPC Routes
 const router = trpcRouter({
   getUsers: procedure
     .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['General'] } })
@@ -144,6 +149,7 @@ const router = trpcRouter({
     }),
 });
 
+//? Generate OpenAPI
 const oApi = generateOpenApiDocument(router, {
   title: 'Example API',
   description: 'Accepts any token as authorization',
@@ -153,9 +159,17 @@ const oApi = generateOpenApiDocument(router, {
 oApi.security = [{ bearerAuth: [] }];
 oApi.components!.securitySchemes = { bearerAuth: { scheme: 'bearer', type: 'http' } };
 
+//? Write OpenAPI to File
+writeFileSync('./openapi.json', JSON.stringify(oApi, null, 2));
+
+//? Setup CORS
 app.use(cors());
-app.get('/view', ui.setup(oApi));
-app.use('/view', ui.serve);
+
+//? Setup Swagger UI
+app.get('/view', setup(oApi));
+app.use('/view', serve);
+
+//? Setup REST and TRPC Middleware
 app.use(
   '/',
   createOpenApiExpressMiddleware({
@@ -177,7 +191,7 @@ app.use(
   })
 );
 
-//? JWT Auth and Room Join Middleware
+//? SocketIO JWT Auth and Room Join Middleware
 const numClients: Record<string, number> = {};
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
@@ -201,6 +215,7 @@ io.use((socket, next) => {
     });
 
     //? Check Decoded JWT and Join Different Rooms
+    //? Emit Signals to Rooms or All Users
     socket.join('admins');
   };
 
