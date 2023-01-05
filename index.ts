@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import c from 'chalk';
 import ui from 'swagger-ui-express';
-import { verify } from 'jsonwebtoken';
+import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { z } from 'zod';
@@ -19,6 +19,7 @@ import {
   createOpenApiExpressMiddleware,
 } from 'trpc-openapi';
 
+const isProd = process.env.NODE_ENV === 'production';
 const jwtSecret = process.env.JWT_SECRET ?? '';
 
 config();
@@ -42,9 +43,11 @@ const createContext = ({ req }: CreateExpressContextOptions) => {
         return null;
       }
       //? Check Decoded JWT and Return User With Permissions
-      return decoded;
-    } catch (error) {
-      console.log(c.red(`{REST/TRPC} ${error}}`));
+      return {};
+    } catch (error: any) {
+      //? Accept Malformed JWTs in Development
+      if (!isProd && error.message === 'jwt malformed') return {};
+      console.log(c.red(`{REST/TRPC} ${error}`));
       return null;
     }
   };
@@ -57,7 +60,7 @@ const { router: trpcRouter, procedure } = initTRPC
   .meta<OpenApiMeta>()
   .create({
     errorFormatter: ({ error, shape }) => {
-      if (error.code === 'INTERNAL_SERVER_ERROR' && process.env.NODE_ENV === 'production')
+      if (error.code === 'INTERNAL_SERVER_ERROR' && isProd)
         return { ...shape, message: 'Internal server error' };
       return shape;
     },
@@ -108,7 +111,7 @@ const router = trpcRouter({
   updateUser: protectedProcedure
     .meta({ openapi: { method: 'PUT', path: '/update_user', tags: ['Auth Required'] } })
     .input(z.object({ id: z.string(), name: z.string() }))
-    .output(z.string())
+    .output(z.object({}))
     .mutation(async ({ input, ctx }) => {
       const res = await prisma.user
         .update({ where: { id: input.id }, data: { name: input.name } })
@@ -121,12 +124,12 @@ const router = trpcRouter({
         });
       io.to('admins').emit('updateUser', { res, user: ctx.user });
       prisma.$disconnect();
-      return res.id;
+      return {};
     }),
   deleteUser: protectedProcedure
     .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Auth Required'] } })
     .input(z.object({ id: z.string() }))
-    .output(z.string())
+    .output(z.object({}))
     .mutation(async ({ input, ctx }) => {
       const res = await prisma.user
         .delete({ where: { id: input.id } })
@@ -139,7 +142,7 @@ const router = trpcRouter({
         });
       io.to('admins').emit('deleteUser', { res, user: ctx.user });
       prisma.$disconnect();
-      return res.id;
+      return {};
     }),
 });
 
@@ -185,15 +188,8 @@ io.use((socket, next) => {
     return next(new Error('Auth error'));
   }
 
-  try {
-    const decoded = verify(String(token), jwtSecret);
-    if (!decoded) {
-      console.log(c.red('{WS} TOKEN_DECODING_ERROR'));
-      return next(new Error('Auth error'));
-    }
-
-    socket.on('join', (r) => {
-      const room = r as string;
+  const roomJoin = (decoded: string | JwtPayload) => {
+    socket.on('join', (room: string) => {
       if (numClients[room] == undefined) numClients[room] = 1;
       else numClients[room]++;
       console.log(c.blue(`{WS} ++ ${decoded} [${room}] (Total: ${numClients[room]})`));
@@ -208,7 +204,18 @@ io.use((socket, next) => {
 
     //? Check Decoded JWT and Join Different Rooms
     socket.join('admins');
-  } catch (error) {
+  };
+
+  try {
+    const decoded = verify(String(token), jwtSecret);
+    if (!decoded) {
+      console.log(c.red('{WS} TOKEN_DECODING_ERROR'));
+      return next(new Error('Auth error'));
+    }
+    roomJoin(decoded);
+  } catch (error: any) {
+    //? Accept Malformed JWTs in Development
+    if (!isProd && error.message === 'jwt malformed') roomJoin('');
     console.log(c.red(`{WS} ${error}}`));
     return next(new Error('Auth error'));
   }
