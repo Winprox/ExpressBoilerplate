@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import c from 'chalk';
 import ui from 'swagger-ui-express';
+import { verify } from 'jsonwebtoken';
+import { Server } from 'socket.io';
+import { createServer } from 'http';
 import { z } from 'zod';
 import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
@@ -16,19 +19,37 @@ import {
   createOpenApiExpressMiddleware,
 } from 'trpc-openapi';
 
-// import { EventEmitter } from 'events';
-// import { observable } from '@trpc/server/observable';
-// const addEE = new EventEmitter();
+const jwtSecret = process.env.JWT_SECRET ?? '';
 
 config();
+const port = process.env.PORT ?? 8080;
+const app = express();
+const server = createServer(app);
+const io = new Server(server);
 
 const createContext = ({ req }: CreateExpressContextOptions) => {
+  //? JWT Auth
   const getUser = () => {
-    console.log(req.headers);
-    if (req.headers.authorization) return {};
-    else return null;
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      console.log(c.red('{REST/TRPC} NO_TOKEN'));
+      return null;
+    }
+    try {
+      const decoded = verify(String(token), jwtSecret);
+      if (!decoded) {
+        console.log(c.red('{REST/TRPC} TOKEN_DECODING_ERROR'));
+        return null;
+      }
+      //? Check Decoded JWT and Return User With Permissions
+      return decoded;
+    } catch (error) {
+      console.log(c.red(`{REST/TRPC} ${error}}`));
+      return null;
+    }
   };
-  return { user: getUser() };
+
+  return { req, user: getUser() };
 };
 
 const { router: trpcRouter, procedure } = initTRPC
@@ -43,17 +64,18 @@ const { router: trpcRouter, procedure } = initTRPC
   });
 
 const protectedProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'User not found' });
+  //? Check User Permissions
+  if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 
 const prisma = new PrismaClient();
 const router = trpcRouter({
-  users: protectedProcedure
-    .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['Users'] } })
+  getUsers: procedure
+    .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['General'] } })
     .input(z.object({}))
     .output(z.array(z.object({ id: z.string(), name: z.string() })))
-    .query(async () => {
+    .query(async ({ ctx }) => {
       const res = await prisma.user.findMany().catch(({ code, message }) => {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -61,14 +83,15 @@ const router = trpcRouter({
           cause: { code, message },
         });
       });
+      io.to('admins').emit('users', { res, user: ctx.user });
       prisma.$disconnect();
       return res;
     }),
   addUser: protectedProcedure
-    .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Users'] } })
+    .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Auth Required'] } })
     .input(z.object({ name: z.string() }))
     .output(z.string())
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const res = await prisma.user
         .create({ data: { name: input.name } })
         .catch(({ code, message }) => {
@@ -78,14 +101,15 @@ const router = trpcRouter({
             cause: { code, message },
           });
         });
+      io.to('admins').emit('addUser', { res, user: ctx.user });
       prisma.$disconnect();
       return res.id;
     }),
   updateUser: protectedProcedure
-    .meta({ openapi: { method: 'PUT', path: '/update_user', tags: ['Users'] } })
+    .meta({ openapi: { method: 'PUT', path: '/update_user', tags: ['Auth Required'] } })
     .input(z.object({ id: z.string(), name: z.string() }))
     .output(z.string())
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const res = await prisma.user
         .update({ where: { id: input.id }, data: { name: input.name } })
         .catch(({ code, message }) => {
@@ -95,14 +119,15 @@ const router = trpcRouter({
             cause: { code, message },
           });
         });
+      io.to('admins').emit('updateUser', { res, user: ctx.user });
       prisma.$disconnect();
       return res.id;
     }),
   deleteUser: protectedProcedure
-    .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Users'] } })
+    .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Auth Required'] } })
     .input(z.object({ id: z.string() }))
     .output(z.string())
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const res = await prisma.user
         .delete({ where: { id: input.id } })
         .catch(({ code, message }) => {
@@ -112,22 +137,11 @@ const router = trpcRouter({
             cause: { code, message },
           });
         });
+      io.to('admins').emit('deleteUser', { res, user: ctx.user });
       prisma.$disconnect();
       return res.id;
     }),
-  //? Will not work with OpenAPI
-  // onAdd: procedure
-  //   .meta({ openapi: { method: 'GET', path: '/on_add', tags: ['Ping'] } })
-  //   .subscription(() =>
-  //     observable<User>(() => {
-  //       const listener = (user: User) => addEE.emit('data', user);
-  //       addEE.on('add', listener);
-  //       return () => addEE.off('add', listener);
-  //     })
-  //   ),
 });
-
-const port = process.env.PORT ?? 8080;
 
 const oApi = generateOpenApiDocument(router, {
   title: 'Example API',
@@ -138,7 +152,6 @@ const oApi = generateOpenApiDocument(router, {
 oApi.security = [{ bearerAuth: [] }];
 oApi.components!.securitySchemes = { bearerAuth: { scheme: 'bearer', type: 'http' } };
 
-const app = express();
 app.use(cors());
 app.get('/view', ui.setup(oApi));
 app.use('/view', ui.serve);
@@ -162,4 +175,45 @@ app.use(
       console.log(c.red(`{TRPC} [${path}] ${error.code}: ${error.message}`)),
   })
 );
-app.listen(port, () => console.log(c.blue(`http://localhost:${port}/view`)));
+
+//? JWT Auth and Room Join Middleware
+const numClients: Record<string, number> = {};
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.log(c.red('{WS} NO_TOKEN'));
+    return next(new Error('Auth error'));
+  }
+
+  try {
+    const decoded = verify(String(token), jwtSecret);
+    if (!decoded) {
+      console.log(c.red('{WS} TOKEN_DECODING_ERROR'));
+      return next(new Error('Auth error'));
+    }
+
+    socket.on('join', (r) => {
+      const room = r as string;
+      if (numClients[room] == undefined) numClients[room] = 1;
+      else numClients[room]++;
+      console.log(c.blue(`{WS} ++ ${decoded} [${room}] (Total: ${numClients[room]})`));
+    });
+
+    socket.on('disconnect', () => {
+      socket.rooms.forEach((room) => {
+        if (numClients[room] !== undefined) numClients[room]--;
+        console.log(c.blue(`{WS} -- ${decoded} [${room}] (Total: ${numClients[room]})`));
+      });
+    });
+
+    //? Check Decoded JWT and Join Different Rooms
+    socket.join('admins');
+  } catch (error) {
+    console.log(c.red(`{WS} ${error}}`));
+    return next(new Error('Auth error'));
+  }
+
+  next();
+});
+
+server.listen(port, () => console.log(c.blue(`http://localhost:${port}/view`)));
