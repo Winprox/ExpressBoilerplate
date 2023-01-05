@@ -32,10 +32,8 @@ const createContext = ({ req }: CreateExpressContextOptions) => {
   //? JWT Auth
   const getUser = () => {
     const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      console.log(c.red('{REST/TRPC} NO_TOKEN'));
-      return null;
-    }
+    if (!token) return null;
+
     try {
       const decoded = verify(String(token), jwtSecret);
       if (!decoded) {
