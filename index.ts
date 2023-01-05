@@ -8,6 +8,7 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { z } from 'zod';
 import { config } from 'dotenv';
+import { SHA256 } from 'crypto-js';
 import { PrismaClient } from '@prisma/client';
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import {
@@ -78,7 +79,7 @@ const protectedProcedure = procedure.use(({ ctx, next }) => {
 //? TRPC Routes
 const router = trpcRouter({
   getUsers: procedure
-    .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['General'] } })
+    .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['Base'] } })
     .input(z.object({}))
     .output(z.array(z.object({ id: z.string(), name: z.string() })))
     .query(async ({ ctx }) => {
@@ -94,12 +95,12 @@ const router = trpcRouter({
       return res;
     }),
   addUser: protectedProcedure
-    .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Auth Required'] } })
-    .input(z.object({ name: z.string() }))
+    .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Admin'] } })
+    .input(z.object({ name: z.string(), pass: z.string().min(6), ifAdmin: z.boolean() }))
     .output(z.string())
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input: { name, ifAdmin, pass }, ctx }) => {
       const res = await prisma.user
-        .create({ data: { name: input.name } })
+        .create({ data: { name, ifAdmin, pass: SHA256(pass).toString() } })
         .catch(({ code, message }) => {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -112,12 +113,29 @@ const router = trpcRouter({
       return res.id;
     }),
   updateUser: protectedProcedure
-    .meta({ openapi: { method: 'PUT', path: '/update_user', tags: ['Auth Required'] } })
-    .input(z.object({ id: z.string(), name: z.string() }))
+    .meta({
+      openapi: {
+        method: 'PUT',
+        path: '/update_user',
+        tags: ['Admin'],
+        description: 'Everything except for [id] is optional',
+      },
+    })
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        pass: z.string().min(6).optional(),
+        ifAdmin: z.boolean().optional(),
+      })
+    )
     .output(z.object({}))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input: { id, name, pass, ifAdmin }, ctx }) => {
       const res = await prisma.user
-        .update({ where: { id: input.id }, data: { name: input.name } })
+        .update({
+          where: { id },
+          data: { name, pass: pass ? SHA256(pass).toString() : undefined, ifAdmin },
+        })
         .catch(({ code, message }) => {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -130,19 +148,17 @@ const router = trpcRouter({
       return {};
     }),
   deleteUser: protectedProcedure
-    .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Auth Required'] } })
+    .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Admin'] } })
     .input(z.object({ id: z.string() }))
     .output(z.object({}))
-    .mutation(async ({ input, ctx }) => {
-      const res = await prisma.user
-        .delete({ where: { id: input.id } })
-        .catch(({ code, message }) => {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Internal server error',
-            cause: { code, message },
-          });
+    .mutation(async ({ input: { id }, ctx }) => {
+      const res = await prisma.user.delete({ where: { id } }).catch(({ code, message }) => {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Internal server error',
+          cause: { code, message },
         });
+      });
       io.to('admins').emit('deleteUser', { res, user: ctx.user });
       prisma.$disconnect();
       return {};
