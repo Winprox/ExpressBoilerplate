@@ -32,7 +32,7 @@ export const generateUsersRouter = (router: any) =>
       .output(z.string())
       .mutation(async ({ input: { name, ifAdmin, pass }, ctx: { user } }) => {
         const res = await prisma.user
-          .create({ data: { name, ifAdmin, pass: SHA256(pass).toString() } })
+          .create({ data: { name, ifAdmin, pass: String(SHA256(pass)) } })
           .catch(({ message }) => {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -67,7 +67,7 @@ export const generateUsersRouter = (router: any) =>
         await prisma.user
           .update({
             where: { id },
-            data: { name, pass: pass ? SHA256(pass).toString() : undefined, ifAdmin },
+            data: { name, pass: pass ? String(SHA256(pass)) : undefined, ifAdmin },
           })
           .catch(({ message }) => {
             throw new TRPCError({

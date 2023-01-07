@@ -1,6 +1,6 @@
 import c from 'chalk';
 import cors from 'cors';
-import express, { CookieOptions } from 'express';
+import express from 'express';
 import { writeFileSync } from 'fs';
 import { setup, serve } from 'swagger-ui-express';
 import { verify, JwtPayload } from 'jsonwebtoken';
@@ -10,7 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
-import { port, isProd, jwtSecret } from './utils';
+import { port, jwtSecret } from './utils';
 import { router, createContext } from './router/_index';
 
 const app = express();
@@ -21,7 +21,6 @@ export const io = new Server(server);
 //? Generate OpenAPI
 const oApi = generateOpenApiDocument(router, {
   title: 'Example API',
-  description: 'Accepts any token as authorization',
   version: '1.0.0',
   baseUrl: `http://localhost:${port}`,
 });

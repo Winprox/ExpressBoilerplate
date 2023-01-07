@@ -13,7 +13,7 @@ export const generateAuthRouter = (router: any) =>
       .output(z.object({}))
       .query(async ({ input: { name, pass }, ctx: { req, res } }) => {
         const user = await prisma.user
-          .findFirst({ where: { name, pass: SHA256(pass).toString() } })
+          .findFirst({ where: { name, pass: String(SHA256(pass)) } })
           .catch(({ message }) => {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',

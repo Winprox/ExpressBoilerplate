@@ -3,7 +3,13 @@ import { parse } from 'cookie';
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { OpenApiMeta } from 'trpc-openapi';
-import { getIdFromJWT, updateSessionAndIssueJWTs, isProd, jwtSecret } from '../utils';
+import {
+  isProd,
+  jwtSecret,
+  getIdFromJWT,
+  getRequestFingerprint,
+  updateSessionAndIssueJWTs,
+} from '../utils';
 import { prisma } from '../index';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
@@ -12,50 +18,41 @@ import { generateUsersRouter } from './users';
 export const createContext = async ({ req, res }: CreateExpressContextOptions) => {
   //? JWT Auth
   const auth = async () => {
-    //? Check User in DB
-    const checkUser = async (id: string) => {
-      const user = await prisma.user.findFirst({ where: { id } });
-      if (!user) {
-        console.log(c.red('{REST/TRPC} USER_NOT_FOUND'));
-        await prisma.session.delete({ where: { id } }); //? Delete Session
-        return undefined;
-      }
-      return { id: user.id, name: user.name, ifAdmin: user.ifAdmin };
-    };
-
     //? Get JWTs from Cookies
     const cookies = parse(req.headers.cookie ?? '');
     const token = cookies.token;
-    const aToken = cookies.aToken;
+    const aToken = cookies.aToken; //? Access Token
+    if (!token || !aToken) return undefined;
 
-    //? If Authed, check Access Token
-    if (token && aToken) {
-      const id = getIdFromJWT(aToken, jwtSecret);
-      if (!id) return undefined;
-      return checkUser(id);
-    }
-
-    //? If not Authed, check Refresh Token
-    if (!token) return undefined;
     const id = getIdFromJWT(token, jwtSecret);
     if (!id) return undefined;
 
     //? Check Session
-    const ip = req.socket.remoteAddress;
+    const fingerprint = getRequestFingerprint({ req, res });
     const session = await prisma.session.findFirst({ where: { id } });
-    if (!session || session.token !== token || session.issuedTo !== ip) {
+    if (!session || session.token !== token || session.issuedTo !== fingerprint) {
       console.log(c.red('{REST/TRPC} SESSION_NOT_FOUND'));
-      await prisma.session.delete({ where: { id } }); //? Delete Session
+      await prisma.session.deleteMany({ where: { id } }); //? Delete Session
       return undefined;
     }
 
-    updateSessionAndIssueJWTs({ req, res }, id, prisma);
-    return checkUser(id);
+    //? Check User in DB
+    const user = await prisma.user.findFirst({ where: { id } });
+    if (!user) {
+      console.log(c.red('{REST/TRPC} USER_NOT_FOUND'));
+      await prisma.session.deleteMany({ where: { id } }); //? Delete Session
+      return undefined;
+    }
+
+    const aId = getIdFromJWT(aToken, jwtSecret); //? Id from Access Token
+    if (!aId) updateSessionAndIssueJWTs({ req, res }, id, prisma);
+
+    return { id: user.id, name: user.name, ifAdmin: user.ifAdmin };
   };
 
   const user = await auth();
   if (!user) {
-    //? Delete Cookies
+    //? Delete Cookies if Auth Failed
     res.clearCookie('token');
     res.clearCookie('aToken');
   }
