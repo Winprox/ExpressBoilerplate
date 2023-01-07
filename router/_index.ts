@@ -3,7 +3,7 @@ import { parse } from 'cookie';
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { OpenApiMeta } from 'trpc-openapi';
-import { getIdFromJWT, issueJWTsAndUpdateSession, isProd, jwtSecret } from '../utils';
+import { getIdFromJWT, updateSessionAndIssueJWTs, isProd, jwtSecret } from '../utils';
 import { prisma } from '../index';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
@@ -49,7 +49,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
       return undefined;
     }
 
-    issueJWTsAndUpdateSession({ req, res }, id, prisma);
+    updateSessionAndIssueJWTs({ req, res }, id, prisma);
     return checkUser(id);
   };
 

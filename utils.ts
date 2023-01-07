@@ -26,7 +26,7 @@ export const getIdFromJWT = (token: string, jwtSecret: string) => {
   }
 };
 
-export const issueJWTsAndUpdateSession = async (
+export const updateSessionAndIssueJWTs = async (
   { req, res }: CreateExpressContextOptions,
   userId: string,
   prisma: PrismaClient
