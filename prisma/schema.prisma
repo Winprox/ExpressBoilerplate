@@ -9,10 +9,16 @@ datasource db {
 }
 
 model User {
-  id      String  @id @default(uuid())
+  id      String   @id @default(uuid())
   name    String
   pass    String
-  ifAdmin Boolean @default(false)
-  token   String?
-  tokenIP String?
+  ifAdmin Boolean  @default(false)
+  session Session?
+}
+
+model Session {
+  id       String @id
+  token    String
+  issuedTo String
+  user     User   @relation(fields: [id], references: [id])
 }

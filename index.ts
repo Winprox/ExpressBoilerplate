@@ -1,169 +1,28 @@
-import express from 'express';
-import cors from 'cors';
 import c from 'chalk';
+import cors from 'cors';
+import express, { CookieOptions } from 'express';
 import { writeFileSync } from 'fs';
 import { setup, serve } from 'swagger-ui-express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { z } from 'zod';
 import { config } from 'dotenv';
-import { SHA256 } from 'crypto-js';
 import { PrismaClient } from '@prisma/client';
-import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
-import {
-  createExpressMiddleware,
-  CreateExpressContextOptions,
-} from '@trpc/server/adapters/express';
-import {
-  OpenApiMeta,
-  generateOpenApiDocument,
-  createOpenApiExpressMiddleware,
-} from 'trpc-openapi';
+import { TRPCError } from '@trpc/server';
+import { createExpressMiddleware } from '@trpc/server/adapters/express';
+import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
+import { router, createContext } from './router/_index';
 
 config(); //? Load .env
-const port = process.env.PORT ?? 8080;
-const isProd = process.env.NODE_ENV === 'production';
-const jwtSecret = process.env.JWT_SECRET ?? '';
+export const port = process.env.PORT ?? 8080;
+export const isProd = process.env.NODE_ENV === 'production';
+export const jwtSecret = process.env.JWT_SECRET ?? '';
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
-const prisma = new PrismaClient();
-
-//? TRPC Context
-const createContext = ({ req }: CreateExpressContextOptions) => {
-  //? JWT Auth
-  const getUser = () => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return null;
-
-    try {
-      const decoded = verify(String(token), jwtSecret);
-      if (!decoded) {
-        console.log(c.red('{REST/TRPC} TOKEN_DECODING_ERROR'));
-        return null;
-      }
-      //? Check Decoded JWT and Return User With Permissions
-      return {};
-    } catch (error: any) {
-      //? Accept Malformed JWTs in Development
-      if (!isProd && error.message === 'jwt malformed') return {};
-      console.log(c.red(`{REST/TRPC} ${error}`));
-      return null;
-    }
-  };
-
-  return { req, user: getUser() };
-};
-
-//? Init TRPC
-const { router: trpcRouter, procedure } = initTRPC
-  .context<inferAsyncReturnType<typeof createContext>>()
-  .meta<OpenApiMeta>()
-  .create({
-    errorFormatter: ({ error, shape }) => {
-      if (error.code === 'INTERNAL_SERVER_ERROR' && isProd)
-        return { ...shape, message: 'Internal server error' };
-      return shape;
-    },
-  });
-
-//? TRPC Protected Middleware
-const protectedProcedure = procedure.use(({ ctx, next }) => {
-  //? Check User Permissions
-  if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
-  return next();
-});
-
-//? TRPC Routes
-const router = trpcRouter({
-  getUsers: procedure
-    .meta({ openapi: { method: 'GET', path: '/get_users', tags: ['Base'] } })
-    .input(z.object({}))
-    .output(z.array(z.object({ id: z.string(), name: z.string() })))
-    .query(async ({ ctx }) => {
-      const res = await prisma.user.findMany().catch(({ code, message }) => {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Internal server error',
-          cause: { code, message },
-        });
-      });
-      io.to('admins').emit('users', { res, user: ctx.user });
-      prisma.$disconnect();
-      return res;
-    }),
-  addUser: protectedProcedure
-    .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Admin'] } })
-    .input(z.object({ name: z.string(), pass: z.string().min(6), ifAdmin: z.boolean() }))
-    .output(z.string())
-    .mutation(async ({ input: { name, ifAdmin, pass }, ctx }) => {
-      const res = await prisma.user
-        .create({ data: { name, ifAdmin, pass: SHA256(pass).toString() } })
-        .catch(({ code, message }) => {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Internal server error',
-            cause: { code, message },
-          });
-        });
-      io.to('admins').emit('addUser', { res, user: ctx.user });
-      prisma.$disconnect();
-      return res.id;
-    }),
-  updateUser: protectedProcedure
-    .meta({
-      openapi: {
-        method: 'PUT',
-        path: '/update_user',
-        tags: ['Admin'],
-        description: 'Everything except for [id] is optional',
-      },
-    })
-    .input(
-      z.object({
-        id: z.string(),
-        name: z.string().optional(),
-        pass: z.string().min(6).optional(),
-        ifAdmin: z.boolean().optional(),
-      })
-    )
-    .output(z.object({}))
-    .mutation(async ({ input: { id, name, pass, ifAdmin }, ctx }) => {
-      const res = await prisma.user
-        .update({
-          where: { id },
-          data: { name, pass: pass ? SHA256(pass).toString() : undefined, ifAdmin },
-        })
-        .catch(({ code, message }) => {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Internal server error',
-            cause: { code, message },
-          });
-        });
-      io.to('admins').emit('updateUser', { res, user: ctx.user });
-      prisma.$disconnect();
-      return {};
-    }),
-  deleteUser: protectedProcedure
-    .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Admin'] } })
-    .input(z.object({ id: z.string() }))
-    .output(z.object({}))
-    .mutation(async ({ input: { id }, ctx }) => {
-      const res = await prisma.user.delete({ where: { id } }).catch(({ code, message }) => {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Internal server error',
-          cause: { code, message },
-        });
-      });
-      io.to('admins').emit('deleteUser', { res, user: ctx.user });
-      prisma.$disconnect();
-      return {};
-    }),
-});
+export const prisma = new PrismaClient();
+export const io = new Server(server);
+export const cookieConfig: CookieOptions = { httpOnly: true, sameSite: 'lax', secure: isProd };
 
 //? Generate OpenAPI
 const oApi = generateOpenApiDocument(router, {
@@ -172,38 +31,40 @@ const oApi = generateOpenApiDocument(router, {
   version: '1.0.0',
   baseUrl: `http://localhost:${port}`,
 });
-oApi.security = [{ bearerAuth: [] }];
-oApi.components!.securitySchemes = { bearerAuth: { scheme: 'bearer', type: 'http' } };
 
 //? Write OpenAPI to File
 writeFileSync('./openapi.json', JSON.stringify(oApi, null, 2));
 
-//? Setup CORS
+//? CORS
 app.use(cors());
 
-//? Setup Swagger UI
+//? Swagger UI
 app.get('/view', setup(oApi));
 app.use('/view', serve);
 
-//? Setup REST and TRPC Middleware
+//? REST and TRPC
+const errorHandler = (type: string, path: any, error: TRPCError) =>
+  console.log(c.red(`{${type}} [${path}] ${error.code}: ${error.message}\n${error.cause}`));
+
 app.use(
   '/',
   createOpenApiExpressMiddleware({
     router,
     createContext,
-    onError: ({ path, error }: any) =>
-      console.log(c.red(`{REST} [${path}] ${error.code}: ${error.message}`)),
+    onError: ({ path, error }: any) => errorHandler('REST', path, error),
     maxBodySize: undefined,
     responseMeta: undefined,
   })
 );
+
 app.use(
   '/trpc',
   createExpressMiddleware({
     router,
     createContext,
-    onError: ({ path, error }) =>
-      console.log(c.red(`{TRPC} [${path}] ${error.code}: ${error.message}`)),
+    onError: ({ path, error }) => errorHandler('TRPC', path, error),
+    maxBodySize: undefined,
+    responseMeta: undefined,
   })
 );
 
@@ -230,8 +91,10 @@ io.use((socket, next) => {
       });
     });
 
-    //? Check Decoded JWT and Join Different Rooms
+    //TODO Check Decoded JWT and Join Different Rooms
     //? Emit Signals to Rooms or All Users
+    // socket.handshake.auth.token;
+    // socket.request.connection.remoteAddress
     socket.join('admins');
   };
 
