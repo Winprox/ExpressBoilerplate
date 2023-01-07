@@ -6,23 +6,17 @@ import { setup, serve } from 'swagger-ui-express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { config } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
+import { port, isProd, jwtSecret } from './utils';
 import { router, createContext } from './router/_index';
-
-config(); //? Load .env
-export const port = process.env.PORT ?? 8080;
-export const isProd = process.env.NODE_ENV === 'production';
-export const jwtSecret = process.env.JWT_SECRET ?? '';
 
 const app = express();
 const server = createServer(app);
 export const prisma = new PrismaClient();
 export const io = new Server(server);
-export const cookieConfig: CookieOptions = { httpOnly: true, sameSite: 'lax', secure: isProd };
 
 //? Generate OpenAPI
 const oApi = generateOpenApiDocument(router, {
@@ -44,7 +38,12 @@ app.use('/view', serve);
 
 //? REST and TRPC
 const errorHandler = (type: string, path: any, error: TRPCError) =>
-  console.log(c.red(`{${type}} [${path}] ${error.code}: ${error.message}\n${error.cause}`));
+  console.log(
+    c.red(
+      `{${type}} [${path}] ${error.code}: ` +
+        `${error.message}${error.cause ? `\n${error.cause}` : ''}`
+    )
+  );
 
 app.use(
   '/',
@@ -105,9 +104,7 @@ io.use((socket, next) => {
       return next(new Error('Auth error'));
     }
     roomJoin(decoded);
-  } catch (error: any) {
-    //? Accept Malformed JWTs in Development
-    if (!isProd && error.message === 'jwt malformed') roomJoin('');
+  } catch (error) {
     console.log(c.red(`{WS} ${error}}`));
     return next(new Error('Auth error'));
   }
