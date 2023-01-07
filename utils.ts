@@ -36,12 +36,13 @@ export const updateSessionAndIssueJWTs = async (
   prisma: PrismaClient
 ) => {
   //? Issue JWTs and set cookies
-  const token = sign({ id: userId }, jwtSecret, { expiresIn: '10d' });
+  const refreshToken = sign({ id: userId }, jwtSecret, { expiresIn: '10d' });
   const accessToken = sign({ id: userId }, jwtSecret, { expiresIn: '15m' });
-  res.cookie('token', token, { ...cookieConfig, maxAge: 864000000 }); //? 10d equivalent
+  res.cookie('token', refreshToken, { ...cookieConfig, maxAge: 864000000 }); //? 10d equivalent
   res.cookie('aToken', accessToken, cookieConfig);
 
   //? Set Session
+  const token = String(SHA256(refreshToken));
   const issuedTo = getRequestFingerprint({ req, res });
   await prisma.session
     .upsert({

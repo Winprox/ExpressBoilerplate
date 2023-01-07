@@ -1,5 +1,6 @@
 import c from 'chalk';
 import { parse } from 'cookie';
+import { SHA256 } from 'crypto-js';
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { OpenApiMeta } from 'trpc-openapi';
@@ -20,14 +21,15 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
   const auth = async () => {
     //? Get JWTs from Cookies
     const cookies = parse(req.headers.cookie ?? '');
-    const token = cookies.token;
-    const aToken = cookies.aToken; //? Access Token
-    if (!token || !aToken) return undefined;
+    const refreshToken = cookies.token;
+    const accessToken = cookies.aToken;
+    if (!refreshToken || !accessToken) return undefined;
 
-    const id = getIdFromJWT(token, jwtSecret);
+    const id = getIdFromJWT(refreshToken, jwtSecret);
     if (!id) return undefined;
 
     //? Check Session
+    const token = String(SHA256(refreshToken));
     const fingerprint = getRequestFingerprint({ req, res });
     const session = await prisma.session.findFirst({ where: { id } });
     if (!session || session.token !== token || session.issuedTo !== fingerprint) {
@@ -44,8 +46,8 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
       return undefined;
     }
 
-    const aId = getIdFromJWT(aToken, jwtSecret); //? Id from Access Token
-    if (!aId) updateSessionAndIssueJWTs({ req, res }, id, prisma);
+    const accessId = getIdFromJWT(accessToken, jwtSecret); //? Id from Access Token
+    if (!accessId) updateSessionAndIssueJWTs({ req, res }, id, prisma);
 
     return { id: user.id, name: user.name, ifAdmin: user.ifAdmin };
   };
