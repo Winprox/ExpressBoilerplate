@@ -3,14 +3,13 @@ import cors from 'cors';
 import express from 'express';
 import { writeFileSync } from 'fs';
 import { setup, serve } from 'swagger-ui-express';
-import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { PrismaClient, User } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
-import { port, jwtSecret, getIdFromJWT, getUserById } from './utils';
+import { port, getIdFromJWT, getUserById } from './utils';
 import { router, createContext } from './router/_index';
 
 const app = express();
