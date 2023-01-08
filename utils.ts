@@ -16,18 +16,28 @@ export const cookieConfig: CookieOptions = { httpOnly: true, secure: true, sameS
 export const getRequestFingerprint = ({ req }: CreateExpressContextOptions) =>
   String(SHA256(`${req.socket.remoteAddress} ${req.headers['user-agent']}`));
 
-export const getIdFromJWT = (token: string, jwtSecret: string) => {
+export const getIdFromJWT = (token: string) => {
   try {
     const decoded: any = verify(token, jwtSecret);
     if (!decoded.id) {
-      console.log(c.red('{REST/TRPC} WRONG_TOKEN_FORMAT'));
+      console.log(c.red('{JWT} WRONG_TOKEN_FORMAT'));
       return undefined;
     }
     return String(decoded.id);
   } catch (error) {
-    console.log(c.red(`{REST/TRPC} ${error}`));
+    console.log(c.red(`{JWT} ${error}`));
     return undefined;
   }
+};
+
+export const getUserById = async (id: string, prisma: PrismaClient) => {
+  const user = await prisma.user.findFirst({ where: { id } });
+  if (!user) {
+    console.log(c.red('{USER} USER_NOT_FOUND'));
+    await prisma.session.deleteMany({ where: { id } }); //? Delete Session
+    return undefined;
+  }
+  return user;
 };
 
 export const updateSessionAndIssueJWTs = async (

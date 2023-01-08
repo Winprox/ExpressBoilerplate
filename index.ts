@@ -6,11 +6,11 @@ import { setup, serve } from 'swagger-ui-express';
 import { verify, JwtPayload } from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
-import { port, jwtSecret } from './utils';
+import { port, jwtSecret, getIdFromJWT, getUserById } from './utils';
 import { router, createContext } from './router/_index';
 
 const app = express();
@@ -68,45 +68,41 @@ app.use(
 
 //? SocketIO JWT Auth and Room Join Middleware
 const numClients: Record<string, number> = {};
-io.use((socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) {
-    console.log(c.red('{WS} NO_TOKEN'));
-    return next(new Error('Auth error'));
-  }
-
-  const roomJoin = (decoded: string | JwtPayload) => {
+io.use(async (socket, next) => {
+  const roomJoin = (user: User) => {
     socket.on('join', (room: string) => {
       if (numClients[room] == undefined) numClients[room] = 1;
       else numClients[room]++;
-      console.log(c.blue(`{WS} ++ ${decoded} [${room}] (Total: ${numClients[room]})`));
+      console.log(c.blue(`{WS} ++ ${user.name} [${room}] (Total: ${numClients[room]})`));
     });
 
     socket.on('disconnect', () => {
       socket.rooms.forEach((room) => {
         if (numClients[room] !== undefined) numClients[room]--;
-        console.log(c.blue(`{WS} -- ${decoded} [${room}] (Total: ${numClients[room]})`));
+        console.log(c.blue(`{WS} -- ${user.name} [${room}] (Total: ${numClients[room]})`));
       });
     });
 
-    //TODO Check Decoded JWT and Join Different Rooms
-    //? Emit Signals to Rooms or All Users
-    // socket.handshake.auth.token;
-    // socket.request.connection.remoteAddress
-    socket.join('admins');
+    socket.join('users');
+    if (user.isAdmin) socket.join('admins');
   };
 
-  try {
-    const decoded = verify(String(token), jwtSecret);
-    if (!decoded) {
-      console.log(c.red('{WS} TOKEN_DECODING_ERROR'));
-      return next(new Error('Auth error'));
-    }
-    roomJoin(decoded);
-  } catch (error) {
-    console.log(c.red(`{WS} ${error}}`));
-    return next(new Error('Auth error'));
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    console.log(c.red('{WS} NO_TOKEN'));
+    throw new Error('Auth error');
   }
+  const id = getIdFromJWT(token);
+  if (!id) {
+    console.log(c.red('{WS} NO_ID'));
+    throw new Error('Auth error');
+  }
+  const user = await getUserById(id, prisma);
+  if (!user) {
+    console.log(c.red('{WS} NO_USER'));
+    throw new Error('Auth error');
+  }
+  roomJoin(user);
 
   next();
 });

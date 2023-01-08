@@ -6,8 +6,8 @@ import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { OpenApiMeta } from 'trpc-openapi';
 import {
   isProd,
-  jwtSecret,
   getIdFromJWT,
+  getUserById,
   getRequestFingerprint,
   updateSessionAndIssueJWTs,
 } from '../utils';
@@ -25,7 +25,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
     const accessToken = cookies.aToken;
     if (!refreshToken || !accessToken) return undefined;
 
-    const id = getIdFromJWT(refreshToken, jwtSecret);
+    const id = getIdFromJWT(refreshToken);
     if (!id) return undefined;
 
     //? Check Session
@@ -38,18 +38,14 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
       return undefined;
     }
 
-    //? Check User in DB
-    const user = await prisma.user.findFirst({ where: { id } });
-    if (!user) {
-      console.log(c.red('{REST/TRPC} USER_NOT_FOUND'));
-      await prisma.session.deleteMany({ where: { id } }); //? Delete Session
-      return undefined;
-    }
+    //? Get User from DB
+    const user = await getUserById(id, prisma);
+    if (!user) return undefined;
 
-    const accessId = getIdFromJWT(accessToken, jwtSecret); //? Id from Access Token
+    const accessId = getIdFromJWT(accessToken); //? Id from Access Token
     if (!accessId) updateSessionAndIssueJWTs({ req, res }, id, prisma);
 
-    return { id: user.id, name: user.name, ifAdmin: user.ifAdmin };
+    return { id: user.id, name: user.name, isAdmin: user.isAdmin };
   };
 
   const user = await auth();
@@ -83,7 +79,7 @@ export const authedProcedure = procedure.use(({ ctx, next }) => {
 
 //? Authed Admin
 export const adminProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user?.ifAdmin) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+  if (!ctx.user?.isAdmin) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 

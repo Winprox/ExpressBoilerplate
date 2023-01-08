@@ -13,7 +13,7 @@ export const generateUsersRouter = (router: any) =>
       .query(async ({ ctx: { user } }) => {
         //? If user is not admin, only return non-admin users
         const res = await prisma.user
-          .findMany({ where: user?.ifAdmin ? {} : { ifAdmin: false } })
+          .findMany({ where: user?.isAdmin ? {} : { isAdmin: false } })
           .catch(({ message }) => {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -23,16 +23,17 @@ export const generateUsersRouter = (router: any) =>
           });
         prisma.$disconnect();
 
+        io.to('users').emit('getUsers', { user });
         io.to('admins').emit('getUsers', { user });
         return res;
       }),
     addUser: adminProcedure
       .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Admin'] } })
-      .input(z.object({ name: z.string(), pass: z.string().min(6), ifAdmin: z.boolean() }))
+      .input(z.object({ name: z.string(), pass: z.string().min(6), isAdmin: z.boolean() }))
       .output(z.string())
-      .mutation(async ({ input: { name, ifAdmin, pass }, ctx: { user } }) => {
+      .mutation(async ({ input: { name, isAdmin, pass }, ctx: { user } }) => {
         const res = await prisma.user
-          .create({ data: { name, ifAdmin, pass: String(SHA256(pass)) } })
+          .create({ data: { name, isAdmin, pass: String(SHA256(pass)) } })
           .catch(({ message }) => {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -42,7 +43,7 @@ export const generateUsersRouter = (router: any) =>
           });
         prisma.$disconnect();
 
-        io.to('admins').emit(`addUser [${res.id}]`, { user, data: { name, pass, ifAdmin } });
+        io.to('admins').emit(`addUser [${res.id}]`, { user, data: { name, pass, isAdmin } });
         return res.id;
       }),
     updateUser: adminProcedure
@@ -59,15 +60,15 @@ export const generateUsersRouter = (router: any) =>
           id: z.string(),
           name: z.string().optional(),
           pass: z.string().min(6).optional(),
-          ifAdmin: z.boolean().optional(),
+          isAdmin: z.boolean().optional(),
         })
       )
       .output(z.object({}))
-      .mutation(async ({ input: { id, name, pass, ifAdmin }, ctx: { user } }) => {
+      .mutation(async ({ input: { id, name, pass, isAdmin }, ctx: { user } }) => {
         await prisma.user
           .update({
             where: { id },
-            data: { name, pass: pass ? String(SHA256(pass)) : undefined, ifAdmin },
+            data: { name, pass: pass ? String(SHA256(pass)) : undefined, isAdmin },
           })
           .catch(({ message }) => {
             throw new TRPCError({
@@ -78,7 +79,7 @@ export const generateUsersRouter = (router: any) =>
           });
         prisma.$disconnect();
 
-        io.to('admins').emit(`updateUser [${id}]`, { user, data: { name, pass, ifAdmin } });
+        io.to('admins').emit(`updateUser [${id}]`, { user, data: { name, pass, isAdmin } });
         return {};
       }),
     deleteUser: adminProcedure
