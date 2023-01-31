@@ -1,8 +1,8 @@
-import { z } from 'zod';
-import { SHA256 } from 'crypto-js';
 import { TRPCError } from '@trpc/server';
-import { prisma, io } from '../index';
-import { authedProcedure, adminProcedure } from './_index';
+import { SHA256 } from 'crypto-js';
+import { z } from 'zod';
+import { io, prisma } from '../index';
+import { adminProcedure, authedProcedure } from './_index';
 
 export const generateUsersRouter = (router: any) =>
   router({

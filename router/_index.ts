@@ -1,17 +1,17 @@
+import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
+import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import c from 'chalk';
 import { parse } from 'cookie';
 import { SHA256 } from 'crypto-js';
-import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
-import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { OpenApiMeta } from 'trpc-openapi';
+import { prisma } from '../index';
 import {
-  isProd,
   getIdFromJWT,
-  getUserById,
   getRequestFingerprint,
+  getUserById,
+  isProd,
   updateSessionAndIssueJWTs,
 } from '../utils';
-import { prisma } from '../index';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
 

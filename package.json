@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package",
   "main": "index.ts",
   "version": "1.0.0",
   "scripts": {

@@ -1,16 +1,16 @@
+import { PrismaClient, User } from '@prisma/client';
+import { TRPCError } from '@trpc/server';
+import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import c from 'chalk';
 import cors from 'cors';
 import express from 'express';
 import { writeFileSync } from 'fs';
-import { setup, serve } from 'swagger-ui-express';
-import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { PrismaClient, User } from '@prisma/client';
-import { TRPCError } from '@trpc/server';
-import { createExpressMiddleware } from '@trpc/server/adapters/express';
-import { generateOpenApiDocument, createOpenApiExpressMiddleware } from 'trpc-openapi';
-import { port, getIdFromJWT, getUserById } from './utils';
-import { router, createContext } from './router/_index';
+import { Server } from 'socket.io';
+import { serve, setup } from 'swagger-ui-express';
+import { createOpenApiExpressMiddleware, generateOpenApiDocument } from 'trpc-openapi';
+import { createContext, router } from './router/_index';
+import { getIdFromJWT, getUserById, port } from './utils';
 
 const app = express();
 const server = createServer(app);

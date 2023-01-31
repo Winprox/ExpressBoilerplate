@@ -3,17 +3,14 @@
   "prettier.singleQuote": true,
   "prettier.printWidth": 95,
 
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true,
+    "source.organizeImports": true,
+    "source.sortMembers": true
+  },
+
   "[prisma]": {
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "Prisma.prisma"
-  },
-
-  "files.exclude": {
-    ".gitignore": true,
-    ".vscode": true,
-    "node_modules": true,
-    "package-lock.json": true,
-    "yarn.lock": true,
-    "pu.sh": true
   }
 }

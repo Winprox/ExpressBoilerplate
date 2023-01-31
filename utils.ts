@@ -1,11 +1,11 @@
-import c from 'chalk';
-import { config } from 'dotenv';
-import { SHA256 } from 'crypto-js';
-import { CookieOptions } from 'express';
-import { sign, verify } from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
+import c from 'chalk';
+import { SHA256 } from 'crypto-js';
+import { config } from 'dotenv';
+import { CookieOptions } from 'express';
+import { sign, verify } from 'jsonwebtoken';
 
 config(); //? Load .env
 export const port = process.env.PORT ?? 8080;
