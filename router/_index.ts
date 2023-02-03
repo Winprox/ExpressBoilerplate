@@ -85,6 +85,6 @@ export const adminProcedure = procedure.use(({ ctx, next }) => {
 
 //? Router
 export const router = trpcRouter({
-  auth: generateAuthRouter(trpcRouter),
-  users: generateUsersRouter(trpcRouter),
+  auth: generateAuthRouter,
+  users: generateUsersRouter,
 });
