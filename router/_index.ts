@@ -5,15 +5,15 @@ import { parse } from 'cookie';
 import { SHA256 } from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
 import { prisma } from '../index';
+import { generateAuthRouter } from './auth';
+import { generateUsersRouter } from './users';
 import {
   getIdFromJWT,
   getRequestFingerprint,
   getUserById,
   isProd,
   updateSessionAndIssueJWTs,
-} from '../utils';
-import { generateAuthRouter } from './auth';
-import { generateUsersRouter } from './users';
+} from './_utils';
 
 //? Context
 export const createContext = async ({ req, res }: CreateExpressContextOptions) => {
@@ -55,7 +55,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
     res.clearCookie('aToken');
   }
 
-  return { req, res, user };
+  return { req, res, prisma, user };
 };
 
 //? Init

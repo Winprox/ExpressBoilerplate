@@ -1,9 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { prisma } from '../index';
-import { updateSessionAndIssueJWTs } from '../utils';
 import { procedure } from './_index';
+import { updateSessionAndIssueJWTs } from './_utils';
 
 export const generateAuthRouter = (router: any) =>
   router({
@@ -11,7 +10,7 @@ export const generateAuthRouter = (router: any) =>
       .meta({ openapi: { method: 'GET', path: '/login', tags: ['Auth'] } })
       .input(z.object({ name: z.string(), pass: z.string() }))
       .output(z.object({}))
-      .query(async ({ input: { name, pass }, ctx: { req, res } }) => {
+      .query(async ({ input: { name, pass }, ctx: { req, res, prisma } }) => {
         const user = await prisma.user
           .findFirst({ where: { name, pass: String(SHA256(pass)) } })
           .catch(({ message }) => {
