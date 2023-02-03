@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { io, prisma } from '../index';
+import { prisma } from '../index';
 import { updateSessionAndIssueJWTs } from '../utils';
 import { procedure } from './_index';
 
@@ -23,9 +23,7 @@ export const generateAuthRouter = (router: any) =>
           });
         prisma.$disconnect();
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' });
-
         updateSessionAndIssueJWTs({ req, res }, user.id, prisma);
-        io.to('admins').emit(`login [${name}]`);
         return {};
       }),
   });

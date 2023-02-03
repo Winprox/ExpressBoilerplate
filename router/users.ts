@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { io, prisma } from '../index';
+import { prisma } from '../index';
 import { adminProcedure, authedProcedure } from './_index';
 
 export const generateUsersRouter = (router: any) =>
@@ -22,9 +22,6 @@ export const generateUsersRouter = (router: any) =>
             });
           });
         prisma.$disconnect();
-
-        io.to('users').emit('getUsers', { user });
-        io.to('admins').emit('getUsers', { user });
         return res;
       }),
     addUser: adminProcedure
@@ -42,8 +39,6 @@ export const generateUsersRouter = (router: any) =>
             });
           });
         prisma.$disconnect();
-
-        io.to('admins').emit(`addUser [${res.id}]`, { user, data: { name, pass, isAdmin } });
         return res.id;
       }),
     updateUser: adminProcedure
@@ -78,8 +73,6 @@ export const generateUsersRouter = (router: any) =>
             });
           });
         prisma.$disconnect();
-
-        io.to('admins').emit(`updateUser [${id}]`, { user, data: { name, pass, isAdmin } });
         return {};
       }),
     deleteUser: adminProcedure
@@ -95,8 +88,6 @@ export const generateUsersRouter = (router: any) =>
           });
         });
         prisma.$disconnect();
-
-        io.to('admins').emit(`deleteUser [${id}]`, { user });
         return {};
       }),
   });

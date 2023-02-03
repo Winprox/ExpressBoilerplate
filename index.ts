@@ -1,4 +1,4 @@
-import { PrismaClient, User } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { TRPCError } from '@trpc/server';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import c from 'chalk';
@@ -6,16 +6,14 @@ import cors from 'cors';
 import express from 'express';
 import { writeFileSync } from 'fs';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
 import { serve, setup } from 'swagger-ui-express';
 import { createOpenApiExpressMiddleware, generateOpenApiDocument } from 'trpc-openapi';
 import { createContext, router } from './router/_index';
-import { getIdFromJWT, getUserById, port } from './utils';
+import { port } from './utils';
 
 const app = express();
 const server = createServer(app);
 export const prisma = new PrismaClient();
-export const io = new Server(server);
 
 //? Generate OpenAPI
 const oApi = generateOpenApiDocument(router, {
@@ -64,46 +62,5 @@ app.use(
     responseMeta: undefined,
   })
 );
-
-//? SocketIO JWT Auth and Room Join Middleware
-const numClients: Record<string, number> = {};
-io.use(async (socket, next) => {
-  const roomJoin = (user: User) => {
-    socket.on('join', (room: string) => {
-      if (numClients[room] == undefined) numClients[room] = 1;
-      else numClients[room]++;
-      console.log(c.blue(`{WS} ++ ${user.name} [${room}] (Total: ${numClients[room]})`));
-    });
-
-    socket.on('disconnect', () => {
-      socket.rooms.forEach((room) => {
-        if (numClients[room] !== undefined) numClients[room]--;
-        console.log(c.blue(`{WS} -- ${user.name} [${room}] (Total: ${numClients[room]})`));
-      });
-    });
-
-    socket.join('users');
-    if (user.isAdmin) socket.join('admins');
-  };
-
-  const token = socket.handshake.auth.token;
-  if (!token) {
-    console.log(c.red('{WS} NO_TOKEN'));
-    throw new Error('Auth error');
-  }
-  const id = getIdFromJWT(token);
-  if (!id) {
-    console.log(c.red('{WS} NO_ID'));
-    throw new Error('Auth error');
-  }
-  const user = await getUserById(id, prisma);
-  if (!user) {
-    console.log(c.red('{WS} NO_USER'));
-    throw new Error('Auth error');
-  }
-  roomJoin(user);
-
-  next();
-});
 
 server.listen(port, () => console.log(c.blue(`http://localhost:${port}/view`)));
