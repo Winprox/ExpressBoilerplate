@@ -89,7 +89,7 @@ export const adminProcedure = procedure.use(({ ctx, next }) => {
 
 //? Require ReAuth
 export const reauthProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user?.accessUpdated)
+  if (ctx.user?.accessUpdated)
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
