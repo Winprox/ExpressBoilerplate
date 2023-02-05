@@ -16,7 +16,7 @@ export const cookieConfig: CookieOptions = { httpOnly: true, secure: true, sameS
 export const getRequestFingerprint = ({ req }: CreateExpressContextOptions) =>
   String(SHA256(`${req.socket.remoteAddress} ${req.headers['user-agent']}`));
 
-export const getIdFromJWT = (token: string) => {
+export const jwtVerifyAndGetId = (token: string) => {
   try {
     const decoded: any = verify(token, jwtSecret);
     if (!decoded.id) {

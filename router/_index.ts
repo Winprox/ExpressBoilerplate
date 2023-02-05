@@ -8,10 +8,10 @@ import { prisma } from '../index';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
 import {
-  getIdFromJWT,
   getRequestFingerprint,
   getUserById,
   isProd,
+  jwtVerifyAndGetId,
   updateSessionAndIssueJWTs,
 } from './_utils';
 
@@ -25,7 +25,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
     const accessToken = cookies.aToken;
     if (!refreshToken || !accessToken) return undefined;
 
-    const id = getIdFromJWT(refreshToken);
+    const id = jwtVerifyAndGetId(refreshToken);
     if (!id) return undefined;
 
     //? Check Session
@@ -42,10 +42,14 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
     const user = await getUserById(id, prisma);
     if (!user) return undefined;
 
-    const accessId = getIdFromJWT(accessToken); //? Id from Access Token
-    if (!accessId) updateSessionAndIssueJWTs({ req, res }, id, prisma);
+    let accessUpdated = false;
+    const accessId = jwtVerifyAndGetId(accessToken); //? Id from Access Token
+    if (!accessId) {
+      accessUpdated = true;
+      updateSessionAndIssueJWTs({ req, res }, id, prisma);
+    }
 
-    return { id: user.id, name: user.name, isAdmin: user.isAdmin };
+    return { id: user.id, name: user.name, isAdmin: user.isAdmin, accessUpdated };
   };
 
   const user = await auth();
@@ -80,6 +84,13 @@ export const authedProcedure = procedure.use(({ ctx, next }) => {
 //? Authed Admin
 export const adminProcedure = procedure.use(({ ctx, next }) => {
   if (!ctx.user?.isAdmin) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+  return next();
+});
+
+//? Require ReAuth
+export const reauthProcedure = procedure.use(({ ctx, next }) => {
+  if (!ctx.user?.accessUpdated)
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 
