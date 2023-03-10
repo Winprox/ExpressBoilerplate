@@ -4,7 +4,7 @@ import c from 'chalk';
 import { parse } from 'cookie';
 import { SHA256 } from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
-import { prisma } from '../index';
+import { prisma } from '..';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
 import {

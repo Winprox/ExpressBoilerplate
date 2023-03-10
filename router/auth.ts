@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { procedure, trpcRouter } from './_index';
+import { procedure, trpcRouter } from '.';
 import { updateSessionAndIssueJWTs } from './_utils';
 
 export const generateAuthRouter = trpcRouter({
