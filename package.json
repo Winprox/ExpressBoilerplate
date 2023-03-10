@@ -5,7 +5,7 @@
   "scripts": {
     "git": "git add . && git commit -m \"$(date '+%-m').$(date '+%-d').$(date '+%-H')\"",
     "upd": "pnpm npm-check-updates -u",
-    "dev": "pnpm --inspect nodemon",
+    "dev": "pnpm nodemon",
     "serve": "pnpm ts-node index.ts",
     "db:view": "prisma studio",
     "db:migrate": "prisma db migrate dev",
