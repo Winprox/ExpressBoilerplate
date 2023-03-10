@@ -4,33 +4,44 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import c from 'chalk';
 import cors from 'cors';
 import express from 'express';
-import { writeFileSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
 import { createServer } from 'http';
+import path from 'path';
 import { serve, setup } from 'swagger-ui-express';
 import { createOpenApiExpressMiddleware, generateOpenApiDocument } from 'trpc-openapi';
 import { createContext, router } from './router/_index';
-import { port } from './router/_utils';
+import { isProd, port } from './router/_utils';
 
 const app = express();
 const server = createServer(app);
 export const prisma = new PrismaClient();
 
-//? Generate OpenAPI
-const oApi = generateOpenApiDocument(router, {
-  title: 'Example API',
-  version: '1.0.0',
-  baseUrl: `http://localhost:${port}`,
-});
-
-//? Write OpenAPI to File
-writeFileSync('./openapi.json', JSON.stringify(oApi, null, 2));
-
 //? CORS
 app.use(cors());
 
-//? Swagger UI
-app.get('/view', setup(oApi));
-app.use('/view', serve);
+if (!isProd) {
+  //? Generate OpenAPI
+  const oApi = generateOpenApiDocument(router, {
+    title: 'Example API',
+    version: '1.0.0',
+    baseUrl: `http://localhost:${port}`,
+  });
+
+  //? Write OpenAPI to File
+  writeFileSync('./openapi.json', JSON.stringify(oApi, null, 2));
+
+  //? Swagger UI
+  app.get('/swagger', setup(oApi));
+  app.use('/swagger', serve);
+}
+
+//? Serve Static
+const dist = `${__dirname}/dist`;
+const distExist = existsSync(dist);
+if (distExist) {
+  app.use(express.static(dist));
+  app.get(['/app', '/app/*'], (_, res) => res.sendFile(path.resolve(dist, 'index.html')));
+}
 
 //? REST and TRPC
 const errorHandler = (type: string, path: any, error: TRPCError) =>
@@ -63,4 +74,7 @@ app.use(
   })
 );
 
-server.listen(port, () => console.log(c.blue(`http://localhost:${port}/view`)));
+server.listen(port, () => {
+  if (distExist) console.log(c.blue(`http://localhost:${port}/app/`));
+  if (!isProd) console.log(c.yellow(`http://localhost:${port}/swagger/`));
+});
