@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { adminProcedure, authedProcedure, TRouter } from './_index';
+import { adminProcedure, authedProcedure, procedure, TRouter } from './_index';
 
 export const generateUsersRouter = (router: TRouter) =>
   router({
@@ -22,23 +22,6 @@ export const generateUsersRouter = (router: TRouter) =>
           });
         prisma.$disconnect();
         return res;
-      }),
-    addUser: adminProcedure
-      .meta({ openapi: { method: 'POST', path: '/add_user', tags: ['Admin'] } })
-      .input(z.object({ name: z.string(), pass: z.string().min(6), isAdmin: z.boolean() }))
-      .output(z.string())
-      .mutation(async ({ input: { name, isAdmin, pass }, ctx: { prisma } }) => {
-        const res = await prisma.user
-          .create({ data: { name, isAdmin, pass: SHA256(pass).toString() } })
-          .catch(({ message }) => {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Internal server error',
-              cause: message,
-            });
-          });
-        prisma.$disconnect();
-        return res.id;
       }),
     updateUser: adminProcedure
       .meta({

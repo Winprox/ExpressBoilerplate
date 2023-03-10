@@ -25,4 +25,21 @@ export const generateAuthRouter = (router: TRouter) =>
         updateSessionAndIssueJWTs({ req, res }, user.id, prisma);
         return {};
       }),
+    register: procedure
+      .meta({ openapi: { method: 'POST', path: '/register', tags: ['Auth'] } })
+      .input(z.object({ name: z.string(), pass: z.string().min(6), isAdmin: z.boolean() }))
+      .output(z.object({}))
+      .mutation(async ({ input: { name, isAdmin, pass }, ctx: { prisma } }) => {
+        const res = await prisma.user
+          .create({ data: { name, isAdmin, pass: SHA256(pass).toString() } })
+          .catch(({ message }) => {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Internal server error',
+              cause: message,
+            });
+          });
+        prisma.$disconnect();
+        return {};
+      }),
   });
