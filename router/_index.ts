@@ -29,7 +29,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
     if (!id) return undefined;
 
     //? Check Session
-    const token = String(SHA256(refreshToken));
+    const token = SHA256(refreshToken).toString();
     const fingerprint = getRequestFingerprint({ req, res });
     const session = await prisma.session.findFirst({ where: { id } });
     if (!session || session.token !== token || session.issuedTo !== fingerprint) {

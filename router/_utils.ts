@@ -14,7 +14,7 @@ export const jwtSecret = process.env.JWT_SECRET ?? '';
 export const cookieConfig: CookieOptions = { httpOnly: true, secure: true, sameSite: 'lax' };
 
 export const getRequestFingerprint = ({ req }: CreateExpressContextOptions) =>
-  String(SHA256(`${req.socket.remoteAddress} ${req.headers['user-agent']}`));
+  SHA256(`${req.socket.remoteAddress} ${req.headers['user-agent']}`).toString();
 
 export const jwtVerifyAndGetId = (token: string) => {
   try {
