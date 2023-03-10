@@ -4,7 +4,7 @@ import c from 'chalk';
 import { parse } from 'cookie';
 import { SHA256 } from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
-import { prisma } from '..';
+import { prisma } from '../index';
 import { generateAuthRouter } from './auth';
 import { generateUsersRouter } from './users';
 import {
@@ -63,6 +63,7 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
 };
 
 //? Init
+export type TRouter = typeof trpcRouter;
 export const { router: trpcRouter, procedure } = initTRPC
   .context<inferAsyncReturnType<typeof createContext>>()
   .meta<OpenApiMeta>()
@@ -81,21 +82,22 @@ export const authedProcedure = procedure.use(({ ctx, next }) => {
   return next();
 });
 
-//? Authed Admin
-export const adminProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user?.isAdmin) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+//? Require ReAuth
+export const reauthProcedure = procedure.use(({ ctx, next }) => {
+  if (!ctx.user || ctx.user.accessUpdated)
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 
-//? Require ReAuth
-export const reauthProcedure = procedure.use(({ ctx, next }) => {
-  if (ctx.user?.accessUpdated)
+//? Authed Admin
+export const adminProcedure = procedure.use(({ ctx, next }) => {
+  if (!ctx.user || !ctx.user.isAdmin)
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
 
 //? Router
 export const router = trpcRouter({
-  auth: generateAuthRouter,
-  users: generateUsersRouter,
+  auth: generateAuthRouter(trpcRouter),
+  users: generateUsersRouter(trpcRouter),
 });
