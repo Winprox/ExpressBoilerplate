@@ -1,12 +1,12 @@
 {
   "$schema": "https://json.schemastore.org/package",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "version": "1.0.0",
   "scripts": {
     "git": "git add . && git commit -m \"$(date '+%-m').$(date '+%-d').$(date '+%-H')\"",
     "upd": "pnpm npm-check-updates -u",
     "dev": "pnpm nodemon",
-    "serve": "pnpm ts-node index.ts",
+    "serve": "pnpm ts-node src/index.ts",
     "db:view": "prisma studio",
     "db:migrate": "prisma db migrate dev",
     "db:pull": "prisma db pull",
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@prisma/client": "^4.11.0",
-    "@trpc/server": "^10.14.1",
+    "@trpc/server": "^10.15.0",
     "chalk": "^4.1.2",
     "cookie": "^0.5.0",
     "cors": "^2.8.5",
@@ -23,7 +23,6 @@
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.0",
-    "socket.io": "^4.6.1",
     "swagger-ui-express": "^4.6.2",
     "trpc-openapi": "^1.1.2",
     "zod": "^3.21.4"

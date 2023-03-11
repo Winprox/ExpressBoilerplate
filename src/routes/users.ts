@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { adminProcedure, authedProcedure, procedure, TRouter } from './_index';
+import { adminProcedure, authedProcedure, TRouter } from '../router';
 
 export const generateUsersRouter = (router: TRouter) =>
   router({

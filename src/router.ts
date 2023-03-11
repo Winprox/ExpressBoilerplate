@@ -4,9 +4,9 @@ import c from 'chalk';
 import { parse } from 'cookie';
 import { SHA256 } from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
-import { prisma } from '../index';
-import { generateAuthRouter } from './auth';
-import { generateUsersRouter } from './users';
+import { prisma } from './index';
+import { generateAuthRouter } from './routes/auth';
+import { generateUsersRouter } from './routes/users';
 import {
   getRequestFingerprint,
   getUserById,

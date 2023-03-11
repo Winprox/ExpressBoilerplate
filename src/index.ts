@@ -9,8 +9,8 @@ import { createServer } from 'http';
 import path from 'path';
 import { serve, setup } from 'swagger-ui-express';
 import { createOpenApiExpressMiddleware, generateOpenApiDocument } from 'trpc-openapi';
-import { createContext, router } from './router/_index';
-import { isProd, port } from './router/_utils';
+import { createContext, router } from './router';
+import { isProd, port } from './_utils';
 
 const app = express();
 const server = createServer(app);

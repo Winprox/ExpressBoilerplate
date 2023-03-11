@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
-import { procedure, TRouter } from './_index';
-import { updateSessionAndIssueJWTs } from './_utils';
+import { procedure, TRouter } from '../router';
+import { updateSessionAndIssueJWTs } from '../_utils';
 
 export const generateAuthRouter = (router: TRouter) =>
   router({
