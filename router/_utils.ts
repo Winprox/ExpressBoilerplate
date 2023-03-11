@@ -52,13 +52,13 @@ export const updateSessionAndIssueJWTs = async (
   res.cookie('aToken', accessToken, cookieConfig);
 
   //? Set Session
-  const token = String(SHA256(refreshToken));
+  const tokenHash = SHA256(refreshToken).toString();
   const issuedTo = getRequestFingerprint({ req, res });
   await prisma.session
     .upsert({
       where: { id: userId },
-      create: { id: userId, token, issuedTo },
-      update: { token, issuedTo },
+      create: { id: userId, token: tokenHash, issuedTo },
+      update: { token: tokenHash, issuedTo },
     })
     .catch(({ message }) => {
       throw new TRPCError({

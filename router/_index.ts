@@ -19,35 +19,35 @@ import {
 export const createContext = async ({ req, res }: CreateExpressContextOptions) => {
   //? JWT Auth
   const auth = async () => {
-    //? Get JWTs from Cookies
     const cookies = parse(req.headers.cookie ?? '');
     const refreshToken = cookies.token;
     const accessToken = cookies.aToken;
     if (!refreshToken || !accessToken) return undefined;
 
-    const id = jwtVerifyAndGetId(refreshToken);
-    if (!id) return undefined;
+    let accessUpdated = false;
+    let id = jwtVerifyAndGetId(accessToken);
+    if (!id) {
+      accessUpdated = true;
+      const refreshTokenId = jwtVerifyAndGetId(refreshToken);
+      if (!refreshTokenId) return undefined;
 
-    //? Check Session
-    const token = SHA256(refreshToken).toString();
-    const fingerprint = getRequestFingerprint({ req, res });
-    const session = await prisma.session.findFirst({ where: { id } });
-    if (!session || session.token !== token || session.issuedTo !== fingerprint) {
-      console.log(c.red('{REST/TRPC} SESSION_NOT_FOUND'));
-      await prisma.session.deleteMany({ where: { id } }); //? Delete Session
-      return undefined;
+      //? Check Session
+      const tokenHash = SHA256(refreshToken).toString();
+      const fingerprint = getRequestFingerprint({ req, res });
+      const session = await prisma.session.findFirst({ where: { id: refreshTokenId } });
+      if (!session || session.token !== tokenHash || session.issuedTo !== fingerprint) {
+        console.log(c.red('{REST/TRPC} SESSION_NOT_FOUND'));
+        await prisma.session.deleteMany({ where: { id: refreshTokenId } });
+        return undefined;
+      }
+
+      updateSessionAndIssueJWTs({ req, res }, refreshTokenId, prisma);
+      id = refreshTokenId;
     }
 
     //? Get User from DB
     const user = await getUserById(id, prisma);
     if (!user) return undefined;
-
-    let accessUpdated = false;
-    const accessId = jwtVerifyAndGetId(accessToken); //? Id from Access Token
-    if (!accessId) {
-      accessUpdated = true;
-      updateSessionAndIssueJWTs({ req, res }, id, prisma);
-    }
 
     return { id: user.id, name: user.name, isAdmin: user.isAdmin, accessUpdated };
   };
@@ -84,7 +84,7 @@ export const authedProcedure = procedure.use(({ ctx, next }) => {
 
 //? Require ReAuth
 export const reauthProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user || ctx.user.accessUpdated)
+  if (!ctx.user || !ctx.user.accessUpdated)
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
   return next();
 });
