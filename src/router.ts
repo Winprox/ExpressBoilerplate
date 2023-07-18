@@ -1,7 +1,7 @@
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import { parse } from 'cookie';
-import Crypto from 'crypto-js';
+import { SHA256 } from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
 import { getRequestFingerprint, getUserById, isProd, jwtVerifyAndGetId, updateSessionAndIssueJWTs, } from './_utils.js'; // prettier-ignore
 import { prisma } from './index.js';
@@ -25,8 +25,8 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
       if (!refreshTokenId) return undefined;
 
       //? Check Session
-      const tokenHash = Crypto.SHA256(refreshToken).toString();
-      const fingerprint = getRequestFingerprint({ req, res });
+      const tokenHash = SHA256(refreshToken).toString();
+      const fingerprint = getRequestFingerprint(req);
       const session = await prisma.session.findFirst({ where: { id: refreshTokenId } });
       if (!session || session.token !== tokenHash || session.issuedTo !== fingerprint) {
         console.log('{REST/TRPC} SESSION_NOT_FOUND');
@@ -61,31 +61,30 @@ export const { router: trpcRouter, procedure } = initTRPC
   .context<inferAsyncReturnType<typeof createContext>>()
   .meta<OpenApiMeta>()
   .create({
-    errorFormatter: ({ error, shape }) => {
-      //? Hide Internal Server Errors in Production
-      if (error.code === 'INTERNAL_SERVER_ERROR' && isProd)
-        return { ...shape, message: 'Internal server error' };
-      return shape;
-    },
+    //? Hide Internal Server Errors in Production
+    errorFormatter: ({ error, shape }) =>
+      error.code === 'INTERNAL_SERVER_ERROR' && isProd
+        ? { ...shape, message: 'Internal server error' }
+        : shape,
   });
+
+const authError = new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
 
 //? Authed
 export const authedProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+  if (!ctx.user) throw authError;
   return next();
 });
 
 //? Require ReAuth
 export const reauthProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user || !ctx.user.accessUpdated)
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+  if (!ctx.user || !ctx.user.accessUpdated) throw authError;
   return next();
 });
 
 //? Authed Admin
 export const adminProcedure = procedure.use(({ ctx, next }) => {
-  if (!ctx.user || !ctx.user.isAdmin)
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Auth error' });
+  if (!ctx.user || !ctx.user.isAdmin) throw authError;
   return next();
 });
 

@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server';
-import Crypto from 'crypto-js';
+import { SHA256 } from 'crypto-js';
 import { z } from 'zod';
 import { adminProcedure, authedProcedure, TRouter } from '../router.js';
 
@@ -14,11 +14,7 @@ export const generateUsersRouter = (router: TRouter) =>
         const res = await prisma.user
           .findMany({ where: user?.isAdmin ? {} : { isAdmin: false } })
           .catch(({ message }) => {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Internal server error',
-              cause: message,
-            });
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
           });
         prisma.$disconnect();
         return res;
@@ -45,14 +41,10 @@ export const generateUsersRouter = (router: TRouter) =>
         await prisma.user
           .update({
             where: { id },
-            data: { name, pass: pass ? Crypto.SHA256(pass).toString() : undefined, isAdmin },
+            data: { name, pass: pass ? SHA256(pass).toString() : undefined, isAdmin },
           })
           .catch(({ message }) => {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Internal server error',
-              cause: message,
-            });
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
           });
         prisma.$disconnect();
         return {};
@@ -63,18 +55,9 @@ export const generateUsersRouter = (router: TRouter) =>
       .output(z.object({}))
       .mutation(async ({ input: { id }, ctx: { prisma, user } }) => {
         if (id == user?.id)
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Cannot delete self',
-            cause: 'BAD_REQUEST',
-          });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot delete self' });
         await prisma.user.delete({ where: { id } }).catch(({ message }) => {
-          console.log(message);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Internal server error',
-            cause: message,
-          });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
         });
         prisma.$disconnect();
         return {};
