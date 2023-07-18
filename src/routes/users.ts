@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
-import { SHA256 } from 'crypto-js';
+import Crypto from 'crypto-js';
 import { z } from 'zod';
-import { adminProcedure, authedProcedure, TRouter } from '../router';
+import { adminProcedure, authedProcedure, TRouter } from '../router.js';
 
 export const generateUsersRouter = (router: TRouter) =>
   router({
@@ -45,7 +45,7 @@ export const generateUsersRouter = (router: TRouter) =>
         await prisma.user
           .update({
             where: { id },
-            data: { name, pass: pass ? SHA256(pass).toString() : undefined, isAdmin },
+            data: { name, pass: pass ? Crypto.SHA256(pass).toString() : undefined, isAdmin },
           })
           .catch(({ message }) => {
             throw new TRPCError({
@@ -61,8 +61,15 @@ export const generateUsersRouter = (router: TRouter) =>
       .meta({ openapi: { method: 'DELETE', path: '/delete_user', tags: ['Admin'] } })
       .input(z.object({ id: z.string() }))
       .output(z.object({}))
-      .mutation(async ({ input: { id }, ctx: { prisma } }) => {
+      .mutation(async ({ input: { id }, ctx: { prisma, user } }) => {
+        if (id == user?.id)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cannot delete self',
+            cause: 'BAD_REQUEST',
+          });
         await prisma.user.delete({ where: { id } }).catch(({ message }) => {
+          console.log(message);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Internal server error',

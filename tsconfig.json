@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "outDir": "dist",
     "module": "NodeNext",
     "strict": true,
-    "esModuleInterop": true,
     "skipLibCheck": true
   }
 }

@@ -1,1 +1,6 @@
-{ "ignore": ["openapi.json"] }
+{
+  "watch": ["src"],
+  "ext": "ts,json",
+  "ignore": ["openapi.json"],
+  "exec": "pnpm serve"
+}

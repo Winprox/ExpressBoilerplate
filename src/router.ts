@@ -1,19 +1,12 @@
 import { inferAsyncReturnType, initTRPC, TRPCError } from '@trpc/server';
 import { CreateExpressContextOptions } from '@trpc/server/adapters/express';
-import c from 'chalk';
 import { parse } from 'cookie';
-import { SHA256 } from 'crypto-js';
+import Crypto from 'crypto-js';
 import { OpenApiMeta } from 'trpc-openapi';
-import { prisma } from './index';
-import { generateAuthRouter } from './routes/auth';
-import { generateUsersRouter } from './routes/users';
-import {
-  getRequestFingerprint,
-  getUserById,
-  isProd,
-  jwtVerifyAndGetId,
-  updateSessionAndIssueJWTs,
-} from './_utils';
+import { getRequestFingerprint, getUserById, isProd, jwtVerifyAndGetId, updateSessionAndIssueJWTs, } from './_utils.js'; // prettier-ignore
+import { prisma } from './index.js';
+import { generateAuthRouter } from './routes/auth.js';
+import { generateUsersRouter } from './routes/users.js';
 
 //? Context
 export const createContext = async ({ req, res }: CreateExpressContextOptions) => {
@@ -32,11 +25,11 @@ export const createContext = async ({ req, res }: CreateExpressContextOptions) =
       if (!refreshTokenId) return undefined;
 
       //? Check Session
-      const tokenHash = SHA256(refreshToken).toString();
+      const tokenHash = Crypto.SHA256(refreshToken).toString();
       const fingerprint = getRequestFingerprint({ req, res });
       const session = await prisma.session.findFirst({ where: { id: refreshTokenId } });
       if (!session || session.token !== tokenHash || session.issuedTo !== fingerprint) {
-        console.log(c.red('{REST/TRPC} SESSION_NOT_FOUND'));
+        console.log('{REST/TRPC} SESSION_NOT_FOUND');
         await prisma.session.deleteMany({ where: { id: refreshTokenId } });
         return undefined;
       }
